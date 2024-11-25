@@ -18,8 +18,7 @@ void SaveBestScore(const std::string& playerName, int score) {
 }
 
 void LoadBestScore(std::string& playerName, int& score) {
-    std::ifstream file("highscore.txt");
-    if (file.is_open()) {
+    if (std::ifstream file("highscore.txt"); file.is_open()) {
         std::getline(file, playerName);
         file >> score;
         file.close();
@@ -32,10 +31,14 @@ void LoadBestScore(std::string& playerName, int& score) {
 
 int main() {
     bool isGameOver = false;
+    bool isPaused = false;  // Variable pour l'état de pause
     const int screenWidth = 800;
     const int screenHeight = 600;
     std::string bestPlayerName = "Nobody";
     int bestScore = 0;
+    LoadBestScore(bestPlayerName, bestScore);
+    std::cout << bestScore << std::endl;
+
     InitWindow(screenWidth, screenHeight, "Tetris - C++23");
     SetTargetFPS(60);
 
@@ -63,7 +66,7 @@ int main() {
             DrawText("TETRIS", 300, 50, 40, BLACK);
             DrawText("Enter your name:", 200, 150, 20, GRAY);
             DrawText(playerNameInput.c_str(), 400, 150, 20, BLACK);
-            DrawText("Select level (1-10) with UP/DOWN arrows:", 200, 200, 20, GRAY);
+            DrawText("Select speed (1-10) with UP/DOWN arrows:", 200, 200, 20, GRAY);
             DrawText(TextFormat("%d", selectedLevel), 650, 200, 20, BLACK);
             DrawText("Press ENTER to play", 200, 300, 20, DARKGRAY);
 
@@ -95,50 +98,67 @@ int main() {
                 isPlaying = true;
             }
         } else if (isPlaying) {
-            // --- Jeu en cours ---
-            DrawText(TextFormat("Player: %s", player.GetName().c_str()), 500, 10, 20, BLACK);
-            DrawText(TextFormat("Level: %d", player.GetLevel()), 500, 40, 20, BLACK);
-            DrawText(TextFormat("Score: %d", score), 500, 70, 20, BLACK);
-
-            float deltaTime = GetFrameTime();
-            dropTimer += deltaTime;
-
-            // Contrôles du joueur
-            if (IsKeyPressed(KEY_LEFT) && piece->IsMoveValid(grid->GetCells(), -1, 0)) { piece->Move(-1, 0); }
-            if (IsKeyPressed(KEY_RIGHT) && piece->IsMoveValid(grid->GetCells(), 1, 0)) { piece->Move(1, 0); }
-            if (IsKeyPressed(KEY_DOWN) && piece->IsMoveValid(grid->GetCells(), 0, 1)) { piece->Move(0, 1); }
+            // --- Gestion de la pause ---
             if (IsKeyPressed(KEY_SPACE)) {
-                piece->Rotate();
-                if (!piece->IsMoveValid(grid->GetCells(), 0, 0)) piece->Rotate();
+                isPaused = !isPaused;  // Basculer entre pause et non-pause
             }
 
-            // Déplacement automatique
-            if (dropTimer > dropInterval) {
-                if (piece->IsMoveValid(grid->GetCells(), 0, 1)) {
-                    piece->Move(0, 1);
-                } else {
-                    piece->AnchorToGrid(grid->GetCells());
+            if (isPaused) {
+                DrawText("PAUSED", screenWidth / 2 - MeasureText("PAUSED", 40) / 2, screenHeight / 2 - 20, 40, RED);
+            } else {
+                // --- Jeu en cours ---
+                DrawText(TextFormat("Player: %s", player.GetName().c_str()), 500, 10, 20, BLACK);
+                DrawText(TextFormat("Level: %d", player.GetLevel()), 500, 40, 20, BLACK);
+                DrawText(TextFormat("Score: %d", score), 500, 70, 20, BLACK);
 
-                    if (grid->IsGameOver()) {
-                        isPlaying = false;
-                        isGameOver = true;
-                    } else {
-                        int clearedInCurrentCall = grid->ClearFullLines();
-                        if (clearedInCurrentCall > 0) {
-                            int basePoints = clearedInCurrentCall * grid->GetCols();
-                            int comboBonus = (clearedInCurrentCall - 1) * basePoints;
-                            score += basePoints + comboBonus;
-                        }
-                        piece = std::make_unique<Piece>(rand() % 7, cellSize);
-                    }
+                // Affichage des commandes
+                DrawText("Controls:", 500, 120, 20, DARKGRAY);
+                DrawText("LEFT: Move Left", 500, 150, 15, GRAY);
+                DrawText("RIGHT: Move Right", 500, 180, 15, GRAY);
+                DrawText("DOWN: Speed Down", 500, 210, 15, GRAY);
+                DrawText("UP: Rotate Piece", 500, 240, 15, GRAY);
+                DrawText("SPACE: Pause", 500, 270, 15, GRAY);
+
+                float deltaTime = GetFrameTime();
+                dropTimer += deltaTime;
+
+                // Contrôles du joueur
+                if (IsKeyPressed(KEY_LEFT) && piece->IsMoveValid(grid->GetCells(), -1, 0)) { piece->Move(-1, 0); }
+                if (IsKeyPressed(KEY_RIGHT) && piece->IsMoveValid(grid->GetCells(), 1, 0)) { piece->Move(1, 0); }
+                if (IsKeyPressed(KEY_DOWN) && piece->IsMoveValid(grid->GetCells(), 0, 1)) { piece->Move(0, 1); }
+                if (IsKeyPressed(KEY_UP)) {
+                    piece->Rotate();  // La flèche haut fait tourner la pièce
+                    if (!piece->IsMoveValid(grid->GetCells(), 0, 0)) piece->Rotate();  // Revenir à l'état précédent si invalide
                 }
-                dropTimer = 0.0f;
-            }
 
-            grid->Draw();
-            piece->Draw();
+                // Déplacement automatique
+                if (dropTimer > dropInterval) {
+                    if (piece->IsMoveValid(grid->GetCells(), 0, 1)) {
+                        piece->Move(0, 1);
+                    } else {
+                        piece->AnchorToGrid(grid->GetCells());
+
+                        if (grid->IsGameOver()) {
+                            isPlaying = false;
+                            isGameOver = true;
+                        } else {
+                            int clearedInCurrentCall = grid->ClearFullLines();
+                            if (clearedInCurrentCall > 0) {
+                                int basePoints = clearedInCurrentCall * grid->GetCols();
+                                int comboBonus = (clearedInCurrentCall - 1) * basePoints;
+                                score += basePoints + comboBonus;
+                            }
+                            piece = std::make_unique<Piece>(rand() % 7, cellSize);
+                        }
+                    }
+                    dropTimer = 0.0f;
+                }
+
+                grid->Draw();
+                piece->Draw();
+            }
         } else if (isGameOver) {
-            // --- Écran Game Over ---
+
             DrawText("Game Over!", 300, 200, 40, RED);
             DrawText(TextFormat("Your score: %d", score), 300, 250, 20, BLACK);
 
